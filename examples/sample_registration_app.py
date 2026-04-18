@@ -56,6 +56,7 @@ HOME_TEMPLATE = """
         input { width: 300px; padding: 8px; }
         button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
         button:hover { background: #0056b3; }
+        .error { color: red; margin-top: 4px; }
     </style>
 </head>
 <body>
@@ -65,48 +66,72 @@ HOME_TEMPLATE = """
     <form method="POST" action="/register">
         <div class="form-group">
             <label for="username">Username:</label>
-            <input type="text" name="username" id="username" required>
+            <input type="text" name="username" id="username" required value="{% if 'username' not in (errors or {}) %}{{ values.get('username','') }}{% endif %}">
             <small>6-20 characters, letters and numbers only</small>
+            {% if errors.get('username') %}
+                <div class="error">{{ errors['username']|join(', ') }}</div>
+            {% endif %}
         </div>
 
         <div class="form-group">
             <label for="email">Email:</label>
-            <input type="email" name="email" id="email" required>
+            <input type="email" name="email" id="email" required value="{% if 'email' not in (errors or {}) %}{{ values.get('email','') }}{% endif %}">
+            {% if errors.get('email') %}
+                <div class="error">{{ errors['email']|join(', ') }}</div>
+            {% endif %}
         </div>
 
         <div class="form-group">
             <label for="password">Password:</label>
             <input type="password" name="password" id="password" required>
             <small>Strong password required: 8+ characters, uppercase, lowercase, numbers, and special characters</small>
+            {% if errors.get('password') %}
+                <div class="error">{{ errors['password']|join(', ') }}</div>
+            {% endif %}
         </div>
 
         <div class="form-group">
             <label for="state">State (US):</label>
-            <input type="text" name="state" id="state" required>
+            <input type="text" name="state" id="state" required value="{% if 'state' not in (errors or {}) %}{{ values.get('state','') }}{% endif %}">
             <small>2-letter state code (e.g., CA, NY)</small>
+            {% if errors.get('state') %}
+                <div class="error">{{ errors['state']|join(', ') }}</div>
+            {% endif %}
         </div>
 
         <div class="form-group">
             <label for="zip">ZIP Code:</label>
-            <input type="text" name="zip" id="zip" required>
+            <input type="text" name="zip" id="zip" required value="{% if 'zip' not in (errors or {}) %}{{ values.get('zip','') }}{% endif %}">
+            {% if errors.get('zip') %}
+                <div class="error">{{ errors['zip']|join(', ') }}</div>
+            {% endif %}
         </div>
 
         <div class="form-group">
             <label for="age">Age:</label>
-            <input type="number" name="age" id="age" required>
+            <input type="number" name="age" id="age" required value="{% if 'age' not in (errors or {}) %}{{ values.get('age','') }}{% endif %}">
             <small>Must be between 18 and 120</small>
+            {% if errors.get('age') %}
+                <div class="error">{{ errors['age']|join(', ') }}</div>
+            {% endif %}
         </div>
 
         <div class="form-group">
             <label for="phone">Phone Number:</label>
-            <input type="text" name="phone" id="phone" required>
+            <input type="text" name="phone" id="phone" required value="{% if 'phone' not in (errors or {}) %}{{ values.get('phone','') }}{% endif %}">
             <small>US phone number (e.g., 555-123-4567)</small>
+            {% if errors.get('phone') %}
+                <div class="error">{{ errors['phone']|join(', ') }}</div>
+            {% endif %}
         </div>
 
         <div class="form-group">
             <label for="birthdate">Birth Date:</label>
-            <input type="text" name="birthdate" id="birthdate" required>
+            <input type="text" name="birthdate" id="birthdate" required value="{% if 'birthdate' not in (errors or {}) %}{{ values.get('birthdate','') }}{% endif %}">
             <small>MM/DD/YYYY format</small>
+            {% if errors.get('birthdate') %}
+                <div class="error">{{ errors['birthdate']|join(', ') }}</div>
+            {% endif %}
         </div>
 
         <button type="submit">Register</button>
@@ -145,10 +170,9 @@ SUCCESS_TEMPLATE = """
 @app.route('/')
 def home():
     """Display the registration form."""
-    return render_template_string(HOME_TEMPLATE)
+    return render_template_string(HOME_TEMPLATE, values={}, errors={})
 
-@app.route('/register', methods=['POST'])
-@fv.validate({
+registration_rules = {
     'form': {
         'username': {
             'required': True,
@@ -187,7 +211,30 @@ def home():
             'rules': fv.DATE
         }
     }
-})
+}
+
+
+def on_register_error(result):
+    """Custom on_error handler that re-renders the form with only validated (safe) values
+    and presents error messages next to offending fields. Any field that failed validation
+    will NOT have its original value reinserted into the page.
+    """
+    errors = result.get('errors', {}) or {}
+
+    # Build a dict of only the validated values: present in rules and not listed in errors
+    sanitized = {}
+    form_rules = registration_rules.get('form', {})
+    for key in form_rules:
+        if key in request.form and key not in errors:
+            sanitized[key] = request.form.get(key)
+
+    # Render the home template with `values` and `errors`
+    resp = render_template_string(HOME_TEMPLATE, values=sanitized, errors=errors)
+    return resp, 400
+
+
+@app.route('/register', methods=['POST'])
+@fv.validate(registration_rules, on_error=on_register_error)
 def register():
     """Handle registration form submission with validation."""
     # If we reach here, validation passed

@@ -4,7 +4,7 @@ errors.py
 Handles error collection and formatting.
 """
 
-HTML_400_PAGE = "<html><body>{}</body></html>"
+HTML_400_PAGE = "<html><body><p>There was an issue validating the data with the errors listed below.</br>Hit the back button to try again.</p>{}</body></html>"
 HTML_ERROR_ITEM = "{}</br>"
 
 
