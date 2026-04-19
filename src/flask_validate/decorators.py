@@ -53,6 +53,14 @@ def exclude_validation(reason="Endpoint does not require input validation"):
 
             return func(*args, **kwargs)
 
+        # Mirror exclusion attributes on the returned wrapper so route inspection
+        # (before any requests) can detect the exclusion.
+        wrapper.__validation_excluded__ = True
+        wrapper.__validation_exclude_reason__ = reason
+        wrapper._flask_validate_excluded = True
+        # Keep reference to original for chained decorators
+        wrapper.__original_func__ = func
+
         return wrapper
     return decorator
 
@@ -149,6 +157,16 @@ def check_unprotected_routes(app=None, warn_unprotected=True, fail_on_unprotecte
         app = current_app
 
     unprotected_routes = []
+    protected_list = []
+    excluded_list = []
+
+    def _resolve_original(f):
+        # Walk any wrapper chain to the original function, if present
+        seen = set()
+        while hasattr(f, '__original_func__') and id(f) not in seen:
+            seen.add(id(f))
+            f = getattr(f, '__original_func__')
+        return f
 
     with app.app_context():
         for rule in app.url_map.iter_rules():
@@ -162,28 +180,72 @@ def check_unprotected_routes(app=None, warn_unprotected=True, fail_on_unprotecte
 
                 endpoint = f"{method} {rule.rule}"
 
-                # Check if this endpoint is protected or excluded
+                # Prefer explicit runtime registry entries if present
                 if endpoint in _route_registry['protected']:
+                    protected_list.append(endpoint)
                     continue
-                elif endpoint in _route_registry['excluded']:
+                if endpoint in _route_registry['excluded']:
+                    excluded_list.append(endpoint)
                     continue
-                else:
-                    # Consider routes that accept user input as potentially unprotected
-                    if method in ('POST', 'PUT', 'PATCH', 'DELETE'):
-                        unprotected_routes.append({
-                            'endpoint': endpoint,
-                            'method': method,
-                            'rule': rule.rule,
-                            'likely_input_route': True
-                        })
-                    elif method == 'GET' and '<' in rule.rule:
-                        # GET routes with parameters might need validation
-                        unprotected_routes.append({
-                            'endpoint': endpoint,
-                            'method': method,
-                            'rule': rule.rule,
-                            'likely_input_route': True
-                        })
+
+                # Inspect the Flask view function for decorator-set attributes
+                view_func = app.view_functions.get(rule.endpoint)
+                resolved = _resolve_original(view_func) if view_func else None
+
+                is_protected = False
+                is_excluded = False
+
+                if view_func is not None:
+                    if getattr(view_func, '_flask_validate_protected', False) or getattr(view_func, '__validation_protected__', False):
+                        is_protected = True
+                    if getattr(view_func, '_flask_validate_excluded', False) or getattr(view_func, '__validation_excluded__', False):
+                        is_excluded = True
+
+                if not (is_protected or is_excluded) and resolved is not None and resolved is not view_func:
+                    # Check attributes on resolved/original function as well
+                    if getattr(resolved, '_flask_validate_protected', False) or getattr(resolved, '__validation_protected__', False):
+                        is_protected = True
+                    if getattr(resolved, '_flask_validate_excluded', False) or getattr(resolved, '__validation_excluded__', False):
+                        is_excluded = True
+
+                if is_protected:
+                    protected_list.append(endpoint)
+                    continue
+                if is_excluded:
+                    excluded_list.append(endpoint)
+                    continue
+
+                # Consider routes that accept user input as potentially unprotected
+                if method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+                    # POST/PUT/PATCH/DELETE routes are more likely to accept user input and should be flagged if unprotected
+                    unprotected_routes.append(endpoint)
+                    # keep this until I decide if I want to add more metadata about the route in the future
+                    # unprotected_routes.append({
+                    #     'endpoint': endpoint,
+                    #     'method': method,
+                    #     'rule': rule.rule,
+                    #     'likely_input_route': True
+                    # })
+                elif method == 'GET' and '<' in rule.rule:
+                    # GET routes with parameters might need validation
+                    unprotected_routes.append(endpoint)
+                    # keep this until I decide if I want to add more metadata about the route in the future
+                    # unprotected_routes.append({
+                    #     'endpoint': endpoint,
+                    #     'method': method,
+                    #     'rule': rule.rule,
+                    #     'likely_input_route': True
+                    # })
+                elif method == 'GET':
+                    # GET routes without parameters are less likely to need validation, but still track them
+                    unprotected_routes.append(endpoint)
+                    # keep this until I decide if I want to add more metadata about the route in the future
+                    # unprotected_routes.append({
+                    #     'endpoint': endpoint,
+                    #     'method': method,
+                    #     'rule': rule.rule,
+                    #     'likely_input_route': False
+                    # })
 
     if unprotected_routes and warn_unprotected:
         warnings.warn(
@@ -199,11 +261,11 @@ def check_unprotected_routes(app=None, warn_unprotected=True, fail_on_unprotecte
             f"Found {len(unprotected_routes)} unprotected routes. "
             "Add @validate() decorators or @exclude_validation() decorators as appropriate."
         )
-
+    
     return {
-        'protected': list(_route_registry['protected']),
-        'excluded': list(_route_registry['excluded']),
-        'unprotected': unprotected_routes
+        'protected': sorted(protected_list),
+        'excluded': sorted(excluded_list),
+        'unprotected': sorted(unprotected_routes)
     }
 
 
@@ -213,11 +275,18 @@ def get_route_security_status():
 
     :return: Dict with route security information
     """
+    # Build an accurate status by scanning the app routes via check_unprotected_routes
+    try:
+        result = check_unprotected_routes(warn_unprotected=False)
+    except TypeError:
+        # Older call-sites may not pass app; ensure current_app is used by check_unprotected_routes
+        result = check_unprotected_routes(None, warn_unprotected=False)
+
     return {
-        'protected_count': len(_route_registry['protected']),
-        'excluded_count': len(_route_registry['excluded']),
-        'unprotected_count': len(_route_registry['unprotected']),
-        'protected': sorted(_route_registry['protected']),
-        'excluded': sorted(_route_registry['excluded']),
-        'unprotected': sorted(_route_registry['unprotected'])
+        'protected_count': len(result.get('protected', [])),
+        'excluded_count': len(result.get('excluded', [])),
+        'unprotected_count': len(result.get('unprotected', [])),
+        'protected': result.get('protected', []),
+        'excluded': result.get('excluded', []),
+        'unprotected': result.get('unprotected', [])
     }

@@ -41,6 +41,8 @@ def security_status():
     <ul>{''.join(f'<li>{route}</li>' for route in status['protected'])}</ul>
     <h3>Excluded:</h3>
     <ul>{''.join(f'<li>{route}</li>' for route in status['excluded'])}</ul>
+    <h3>Unprotected:</h3>
+    <ul>{''.join(f'<li>{route}</li>' for route in status['unprotected'])}</ul>
     """
 
 # HTML Templates
@@ -168,6 +170,7 @@ SUCCESS_TEMPLATE = """
 """
 
 @app.route('/')
+@fv.exclude_validation("Default home page with registration form")
 def home():
     """Display the registration form."""
     return render_template_string(HOME_TEMPLATE, values={}, errors={})
@@ -257,6 +260,12 @@ def register():
                                 age=age,
                                 phone=phone,
                                 birthdate=birthdate)
+
+@app.route('/display_email', methods=['GET'])
+def display_email():
+    """Example of an unprotected route that should be caught by security monitoring."""
+    email = request.args.get('email', 'No email provided')
+    return f"<h1>Email: {email}</h1>"
 
 if __name__ == '__main__':
     print("🚀 Starting Flask Validate Sample Application with security monitoring...")
