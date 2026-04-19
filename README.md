@@ -1,52 +1,106 @@
-# flask-validate
+# 🚀 flask-validate
 
-Lightweight validation for Flask request args and form data — without Flask-WTF.
+**Lightweight, decorator-based input validation for Flask apps — without the overhead of forms or full schema frameworks.**
 
-Note: The purpose of this module is to provide input validation for simple Flask applications. Complex Flask applications using Flask-WTF and Flask API applications should use the input validation facilities provided by those frameworks.
+---
 
-Planned distribution
+## 🎯 Why this exists
 
-This project is intended to be published on PyPI. For now you can install from source (for example with `pip install -e .`). When published the package will be available as `flask-validate` on PyPI.
+Flask developers typically fall into two camps:
 
-Recommended usage
+- 🧱 Full UI apps → use Flask-WTF  
+- 🔌 API apps → use Marshmallow or Pydantic  
 
-- Use this library for small utility Flask applications and microservices where a lightweight decorator-based validation approach is sufficient.
-- For larger Flask applications that use form libraries, prefer `Flask-WTF`.
-- For API-focused Flask apps consider API-first frameworks or schema libraries such as `Marshmallow` or `Pydantic` which provide richer schema validation and serialization.
+But there’s a **gap in the middle**:
 
-## What's New
+> 👉 Simple Flask apps with lightweight UIs that still need safe, structured input validation
 
-- Added support for a custom error handler on validation decorators: pass `on_error` to `@validate(...)` to receive the full validation result and return any Flask response (JSON, text, etc.).
-- Validation errors are now reported per-field: the `result['errors']` structure is a dictionary mapping field keys to lists of messages. The default HTML formatting includes the field name (e.g. `email: Invalid email address`).
-- Examples and tests updated to demonstrate and verify the `on_error` handler and field-level errors.
+**flask-validate is built specifically for that gap.**
 
-## Security Audit Script
+---
 
-The `audit_security.py` script analyzes Flask applications to identify unprotected entry points that may accept user input without proper validation.
+## ✨ What makes this different
 
-### Usage
+- ✅ Decorator-based validation — no forms, no schemas  
+- ✅ Works with query strings + form data  
+- ✅ Field-level error handling  
+- ✅ Custom error responses (HTML, JSON, anything)  
+- 🔥 Security audit tool to detect unprotected routes  
 
-```bash
-# From project root
-python audit_security.py <flask_app>
+---
 
-# Examples
-python audit_security.py myapp:app
-python audit_security.py tests/minimal_app.py:app
-python audit_security.py path/to/my/flask/app.py:app
+## ⚡ Quick example
+
+```python
+from flask import Flask, request
+import flask_validate as fv
+
+app = Flask(__name__)
+
+@app.route("/submit", methods=["POST"])
+@fv.validate({
+    "args": {
+        "st": {"required": True, "rules": fv.US_STATE}
+    },
+    "form": {
+        "zip": {"required": False, "rules": fv.US_ZIP}
+    }
+})
+def submit():
+    return f"State: {request.args['st']}"
 ```
 
-### What it checks
+---
 
-- ✅ **Protected routes**: Routes with `@validate()` decorators
-- ⚪ **Excluded routes**: Routes with `@exclude_validation()` decorators
-- ❌ **Unprotected routes**: Routes without validation that may accept user input
+## 🧠 Error handling (simple → advanced)
 
-### Priority levels
+### Default (HTML response)
 
-- 🚨 **High priority**: POST/PUT/PATCH/DELETE routes without validation
-- ⚠️ **Medium priority**: GET routes with parameters
-- ℹ️ **Low priority**: Simple GET routes (like home pages)
+```python
+@fv.validate(schema)
+def route():
+    ...
+```
+
+### Custom error handler (recommended)
+
+```python
+def json_error_handler(result):
+    return {"errors": result["errors"]}, 400
+
+@fv.validate(schema, on_error=json_error_handler)
+def route():
+    ...
+```
+
+### Field-level errors
+
+```json
+{
+  "errors": {
+    "zip": ["Invalid ZIP code"],
+    "st": ["Invalid US state"]
+  }
+}
+```
+
+---
+
+## 🔐 Built-in Security Audit
+
+Find routes that accept input **without validation**.
+
+### Run it:
+
+```bash
+python -m flask_validate app:app
+```
+
+### What it detects
+
+- ✅ Routes protected with @validate  
+- ⚪ Routes explicitly excluded  
+- ❌ Routes missing validation (potential risk)  
 
 ### Example output
 
@@ -60,22 +114,72 @@ python audit_security.py path/to/my/flask/app.py:app
    ❌ Unprotected routes: 2
    🔒 Security Score: 95.2%
 
-✅ PROTECTED ROUTES (have @validate decorators):
-   ✓ POST /api/users
-   ✓ GET /api/users/<id>
-
-❌ UNPROTECTED ROUTES (may need validation):
+❌ UNPROTECTED ROUTES:
    🚨 POST /api/admin (high priority)
    ℹ️  GET / (low priority)
 ```
 
-### CI/CD Integration
+---
 
-The script exits with code 1 if high-priority unprotected routes are found, making it perfect for CI/CD pipelines:
+## 🧩 When to use this
 
-```yaml
-# In your CI/CD pipeline
-- name: Security Audit
-  run: python audit_security.py myapp:app
-  # Will fail the build if unprotected routes exist
+Use flask-validate when:
+
+- You’re building small to mid-sized Flask apps  
+- You want simple, explicit validation  
+- You don’t want form libraries or heavy schemas  
+
+---
+
+## 🚫 When NOT to use this
+
+- Large UI apps → use Flask-WTF  
+- API-first apps → use Pydantic or Marshmallow  
+
+---
+
+## 📦 Installation (development)
+
+```bash
+pip install -e .
 ```
+
+Planned: PyPI release as flask-validate
+
+---
+
+## 🛡️ Security-first design
+
+- Inspired by OWASP validation guidance  
+- Built to reduce common input validation mistakes  
+- Includes runtime auditing for missing protections  
+
+---
+
+## 🧭 Roadmap
+
+- [ ] PyPI release  
+- [ ] Improved JSON / API support  
+- [ ] Custom rule extensions  
+- [ ] Enhanced reporting + CLI options  
+
+---
+
+## 🤝 Contributing
+
+Contributions, ideas, and feedback are welcome.
+
+---
+
+## ⭐ Why this project stands out
+
+Most validation libraries focus on:
+
+- full frameworks  
+- API schemas  
+
+This one focuses on the overlooked middle.
+
+And adds something most don’t:
+
+> 🔥 Runtime detection of missing validation (security auditing)
