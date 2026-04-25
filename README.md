@@ -4,6 +4,16 @@
 
 ---
 
+## 🚧 Pre-release Feedback Wanted
+
+I'm looking for feedback before publishing to PyPI:
+
+👉 https://github.com/blainekwilson/flask-validate/discussions
+
+Would especially appreciate input on API design and validation patterns.
+
+---
+
 ## 🎯 Why this exists
 
 Flask developers typically fall into two camps:
