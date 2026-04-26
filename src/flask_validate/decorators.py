@@ -217,35 +217,29 @@ def check_unprotected_routes(app=None, warn_unprotected=True, fail_on_unprotecte
 
                 # Consider routes that accept user input as potentially unprotected
                 if method in ('POST', 'PUT', 'PATCH', 'DELETE'):
-                    # POST/PUT/PATCH/DELETE routes are more likely to accept user input and should be flagged if unprotected
-                    unprotected_routes.append(endpoint)
-                    # keep this until I decide if I want to add more metadata about the route in the future
-                    # unprotected_routes.append({
-                    #     'endpoint': endpoint,
-                    #     'method': method,
-                    #     'rule': rule.rule,
-                    #     'likely_input_route': True
-                    # })
+                    # POST/PUT/PATCH/DELETE routes are more likely to accept user input
+                    unprotected_routes.append({
+                        'endpoint': endpoint,
+                        'method': method,
+                        'rule': rule.rule,
+                        'likely_input_route': True
+                    })
                 elif method == 'GET' and '<' in rule.rule:
                     # GET routes with parameters might need validation
-                    unprotected_routes.append(endpoint)
-                    # keep this until I decide if I want to add more metadata about the route in the future
-                    # unprotected_routes.append({
-                    #     'endpoint': endpoint,
-                    #     'method': method,
-                    #     'rule': rule.rule,
-                    #     'likely_input_route': True
-                    # })
+                    unprotected_routes.append({
+                        'endpoint': endpoint,
+                        'method': method,
+                        'rule': rule.rule,
+                        'likely_input_route': True
+                    })
                 elif method == 'GET':
                     # GET routes without parameters are less likely to need validation, but still track them
-                    unprotected_routes.append(endpoint)
-                    # keep this until I decide if I want to add more metadata about the route in the future
-                    # unprotected_routes.append({
-                    #     'endpoint': endpoint,
-                    #     'method': method,
-                    #     'rule': rule.rule,
-                    #     'likely_input_route': False
-                    # })
+                    unprotected_routes.append({
+                        'endpoint': endpoint,
+                        'method': method,
+                        'rule': rule.rule,
+                        'likely_input_route': False
+                    })
 
     if unprotected_routes and warn_unprotected:
         warnings.warn(
@@ -265,7 +259,7 @@ def check_unprotected_routes(app=None, warn_unprotected=True, fail_on_unprotecte
     return {
         'protected': sorted(protected_list),
         'excluded': sorted(excluded_list),
-        'unprotected': sorted(unprotected_routes)
+        'unprotected': sorted(unprotected_routes, key=lambda r: r['endpoint'])
     }
 
 

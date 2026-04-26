@@ -73,6 +73,20 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_data(as_text=True), 'missing state')
 
+    def test_extra_data(self):
+        """Query string: undeclared keys produce an error.
+        """
+        # extra query string data
+        response = self.client.get("/get_us_state_required", query_string={"st": "FL", "extra": "value"})
+        self.assertEqual(response.status_code, 400)
+        body = response.get_data(as_text=True)
+        self.assertIn('extra: Unexpected data received', body)
+        # extra form data
+        response = self.client.post("/post_us_state_required", data={"st": "FL", "extra": "value"})
+        self.assertEqual(response.status_code, 400)
+        body = response.get_data(as_text=True)
+        self.assertIn('extra: Unexpected data received', body)
+
 
     def test_form_state(self):
         """Form POST + query: US state in body and/or query string.
